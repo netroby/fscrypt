@@ -21,13 +21,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "_cgo_export.h"  // for pamInput callback
+#include <security/pam_appl.h>
 
-const char* fscrypt_service = "fscrypt";
+#include "_cgo_export.h"  // for input callbacks
 
-static int pam_conv(int num_msg, const struct pam_message** msg,
-                    struct pam_response** resp, void* appdata_ptr) {
+static int conversation(int num_msg, const struct pam_message** msg,
+                        struct pam_response** resp, void* appdata_ptr) {
   if (num_msg <= 0 || num_msg > PAM_MAX_NUM_MSG) {
     return PAM_CONV_ERR;
   }
@@ -49,16 +50,14 @@ static int pam_conv(int num_msg, const struct pam_message** msg,
     // we just print the error messages or text info to standard output.
     switch (msg[i]->msg_style) {
       case PAM_PROMPT_ECHO_OFF:
-        callback_resp = pamInput(callback_msg);
+        callback_resp = passphraseInput(callback_msg);
         break;
       case PAM_PROMPT_ECHO_ON:
-        // We should never have a request for non-secret data
-        unexpectedMessage(callback_msg);
-        callback_resp = NULL;
+        callback_resp = userInput(callback_msg);
         break;
       case PAM_ERROR_MSG:
       case PAM_TEXT_INFO:
-        printf("%s\n", callback_msg);
+        fprintf(stderr, "%s\n", callback_msg);
         continue;
     }
 
@@ -69,12 +68,14 @@ static int pam_conv(int num_msg, const struct pam_message** msg,
         free((*resp)[i].resp);
       }
       free(*resp);
+      *resp = NULL;
       return PAM_CONV_ERR;
     }
 
     (*resp)[i].resp = callback_resp;
   }
+
   return PAM_SUCCESS;
 }
 
-void pam_init(struct pam_conv* conv) { conv->conv = pam_conv; }
+const struct pam_conv conv = {conversation, NULL};

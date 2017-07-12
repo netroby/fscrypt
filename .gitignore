@@ -1,2 +1,3 @@
-/fscrypt
+fscrypt
 fscrypt.*
+pam_fscrypt.so

@@ -16,6 +16,17 @@
 # the License.
 
 NAME = fscrypt
+
+INSTALL = install
+DESTDIR = /usr/local/bin
+
+PAM_NAME = pam_$(NAME)
+MODULE = $(PAM_NAME).so
+SECURE_DIR = /lib/security
+
+PAM_CONFIG_DIR = /usr/share/pam-configs
+CONFIG_FILE = $(PAM_NAME)/config
+
 # VERSION is formatted as <major>.<minor>.<bugfix>
 # Bugfix releases resolve issues in existing features.
 # Minor releases introduce new features.
@@ -26,6 +37,7 @@ BUILD_TIME = $(shell date)
 
 CFLAGS += -O2 -Wall
 CMD_DIR = github.com/google/$(NAME)/cmd/$(NAME)
+MODULE_DIR = github.com/google/$(NAME)/$(PAM_NAME)
 
 # The code below lets the caller of the makefile change the build flags for
 # fscrypt in a familiar manner. For example, to force the program to statically
@@ -47,13 +59,17 @@ DATE_FLAG = -X "main.buildTime=$(BUILD_TIME)"
 GO_LINK_FLAGS += -s -w $(VERSION_FLAG) $(DATE_FLAG) -extldflags "$(LDFLAGS)"
 GOFLAGS += --ldflags '$(GO_LINK_FLAGS)'
 
-.PHONY: default all $(NAME) go update lint format install clean
+.PHONY: default all $(NAME) $(PAM_NAME) go update lint format install install_pam install_$(NAME) uninstall clean
 
-default: $(NAME)
-all: update go format lint $(NAME)
+default: $(NAME) $(PAM_NAME)
+all: update go format lint $(NAME) $(PAM_NAME)
 
 $(NAME):
 	go build $(GOFLAGS) -o $(NAME) $(CMD_DIR)
+
+$(PAM_NAME):
+	go build -buildmode=c-shared -o $(MODULE) $(MODULE_DIR)
+	rm -f $(PAM_NAME).h
 
 # Makes sure go files build and tests pass
 go:
@@ -74,16 +90,20 @@ format:
 	@govendor fmt +local
 	@find . -name "*.h" -o -name "*.c" -not -path "./vendor/*" | xargs clang-format -i -style=Google
 
-install:
-	go install $(GOFLAGS) $(CMD_DIR)
+install_$(NAME):
+	$(INSTALL) -d $(DESTDIR)
+	$(INSTALL) $(NAME) $(DESTDIR)
 
-install_all:
-	govendor install $(GOFLAGS) +local
+install_pam:
+	$(INSTALL) -d $(SECURE_DIR)
+	$(INSTALL) $(MODULE) $(SECURE_DIR)
+	$(INSTALL) -d $(PAM_CONFIG_DIR)
+	$(INSTALL) $(CONFIG_FILE) $(PAM_CONFIG_DIR)/$(NAME)
 
-TARBALL = $(NAME).$(shell date --iso-8601).tar.gz
-$(TARBALL):
-	git archive --format=tar.gz --output=$(TARBALL) HEAD
-tarball: $(TARBALL)
+install: install_$(NAME) install_pam
+
+uninstall:
+	rm -rf $(DESTDIR)/$(NAME) $(SECURE_DIR)/$(MODULE) $(PAM_CONFIG_DIR)/$(NAME)
 
 clean:
-	rm -rf $(NAME) $(TARBALL)
+	rm -rf $(NAME) $(TARBALL) $(MODULE)

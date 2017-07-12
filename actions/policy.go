@@ -56,7 +56,7 @@ func PurgeAllPolicies(ctx *Context) error {
 
 	for _, policyDescriptor := range policies {
 		service := ctx.getService()
-		err = crypto.RemovePolicyKey(policyDescriptor, service)
+		err = crypto.RemovePolicyKey(service + policyDescriptor)
 
 		switch errors.Cause(err) {
 		case nil, crypto.ErrKeyringSearch:
@@ -188,6 +188,12 @@ func (policy *Policy) Descriptor() string {
 	return policy.data.KeyDescriptor
 }
 
+// Description returns the description that will be used when the key for this
+// Policy is inserted into the keyring
+func (policy *Policy) Description() string {
+	return policy.Context.getService() + policy.Descriptor()
+}
+
 // Destroy removes a policy from the filesystem. The internal key should still
 // be wiped with Lock().
 func (policy *Policy) Destroy() error {
@@ -239,6 +245,27 @@ func (policy *Policy) Unlock(optionFn OptionFunc, keyFn KeyFunc) error {
 	log.Printf("unwrapping policy %s with protector", policy.Descriptor())
 	wrappedPolicyKey := policy.data.WrappedPolicyKeys[idx].WrappedKey
 	policy.key, err = crypto.Unwrap(protectorKey, wrappedPolicyKey)
+	return err
+}
+
+// UnlockWithProtector uses an unlocked Protector to unlock a policy. An error
+// is returned if the Protector is not yet unlocked or does not protect the
+// policy. Does nothing if policy is already unlocked.
+func (policy *Policy) UnlockWithProtector(protector *Protector) error {
+	if policy.key != nil {
+		return nil
+	}
+	if protector.key == nil {
+		return ErrLocked
+	}
+	idx, ok := policy.findWrappedKeyIndex(protector.Descriptor())
+	if !ok {
+		return ErrNotProtected
+	}
+
+	var err error
+	wrappedPolicyKey := policy.data.WrappedPolicyKeys[idx].WrappedKey
+	policy.key, err = crypto.Unwrap(protector.key, wrappedPolicyKey)
 	return err
 }
 
@@ -339,7 +366,7 @@ func (policy *Policy) Apply(path string) error {
 // IsProvisioned returns a boolean indicating if the policy has its key in the
 // keyring, meaning files and directories using this policy are accessible.
 func (policy *Policy) IsProvisioned() bool {
-	_, _, err := crypto.FindPolicyKey(policy.Descriptor(), policy.Context.getService())
+	_, _, err := crypto.FindPolicyKey(policy.Description())
 	return err == nil
 }
 
@@ -349,13 +376,13 @@ func (policy *Policy) Provision() error {
 	if policy.key == nil {
 		return ErrLocked
 	}
-	return crypto.InsertPolicyKey(policy.key, policy.Descriptor(), policy.Context.getService())
+	return crypto.InsertPolicyKey(policy.key, policy.Description())
 }
 
 // Deprovision removes the Policy key from the kernel keyring. This prevents
 // reading and writing to the directory once the caches are cleared.
 func (policy *Policy) Deprovision() error {
-	return crypto.RemovePolicyKey(policy.Descriptor(), policy.Context.getService())
+	return crypto.RemovePolicyKey(policy.Description())
 }
 
 // commitData writes the Policy's current data to the filesystem.

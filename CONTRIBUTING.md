@@ -27,15 +27,14 @@ information on using pull requests.
 If you are making changes to the `fscrypt` component, you will need to have
 [govendor](https://github.com/kardianos/govendor) installed, and you will want
 to use the following additional commands:
-*   `make update` - Updates the dependencies in the `vendor/` directory and
-    updates the `VENDOR_LICENSES` file.
+*   `make update` - Updates the dependencies in the `vendor/` directory.
 *   `make go` - Generates, builds, and tests all the Go code. Requires
     [protoc (v3.0 or later)](https://github.com/google/protobuf/releases) and
     [protoc-gen-go](https://github.com/golang/protobuf).
 *   `make format` - Formats all of the go code.
 *   `make lint` - Checks the code for style errors. Requires
     [`golint`](https://github.com/golang/lint).
-*   `make all` - Runs the above commands and builds `fscrypt`.
+*   `make all` - Runs the above commands, builds `fscrypt` and `pam_fscrypt.so`.
 
 These commands should be run before submitting a pull request.
 

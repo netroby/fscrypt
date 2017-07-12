@@ -20,7 +20,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -30,6 +29,8 @@ import (
 
 	"github.com/google/fscrypt/actions"
 	"github.com/google/fscrypt/metadata"
+	"github.com/google/fscrypt/util"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -45,17 +46,6 @@ var sourceDescriptions = map[metadata.SourceType]string{
 	metadata.SourceType_raw_key:           "A raw 256-bit key",
 }
 
-// promptUser presents a message to the user and returns their input string. An
-// error is returned if our read from standard input fails.
-func promptUser(prompt string) (string, error) {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Print(prompt)
-	if !scanner.Scan() {
-		return "", ErrReadingStdin
-	}
-	return scanner.Text(), nil
-}
-
 // askQuestion asks the user a yes or no question. Returning a boolean on a
 // successful answer and an error if there was not a response from the user.
 // Returns the defaultChoice on empty input (or in quiet mode).
@@ -65,14 +55,14 @@ func askQuestion(question string, defaultChoice bool) (bool, error) {
 		return defaultChoice, nil
 	}
 	// Loop until failure or valid input
-	var input string
-	var err error
 	for {
 		if defaultChoice {
-			input, err = promptUser(question + defaultYesSuffix)
+			fmt.Print(question + defaultYesSuffix)
 		} else {
-			input, err = promptUser(question + defaultNoSuffix)
+			fmt.Print(question + defaultNoSuffix)
 		}
+
+		input, err := util.ReadLine()
 		if err != nil {
 			return false, err
 		}
@@ -117,21 +107,31 @@ func askConfirmation(question string, defaultChoice bool, warning string) error 
 	return nil
 }
 
-// getUsername returns the username for the provided UID. If the UID does not
-// correspond to a user or the username is blank, "UID=<uid>" is returned.
-func getUsername(uid int64) string {
+// usernameFromID returns the username for the provided UID. If the UID does not
+// correspond to a user or the username is blank, an error is returned.
+func usernameFromID(uid int64) (string, error) {
 	u, err := user.LookupId(strconv.Itoa(int(uid)))
 	if err != nil || u.Username == "" {
-		return fmt.Sprintf("UID=%d", uid)
+		return "", errors.Wrapf(ErrUnknownUser, "uid %d", uid)
 	}
-	return u.Username
+	return u.Username, nil
+}
+
+// formatUsername either returns the username for the provided UID, or a string
+// containing the error for unknown UIDs.
+func formatUsername(uid int64) string {
+	username, err := usernameFromID(uid)
+	if err != nil {
+		return fmt.Sprintf("[%v]", err)
+	}
+	return username
 }
 
 // formatInfo gives a string description of metadata.ProtectorData.
 func formatInfo(data actions.ProtectorInfo) string {
 	switch data.Source() {
 	case metadata.SourceType_pam_passphrase:
-		return "login protector for " + getUsername(data.UID())
+		return "login protector for " + formatUsername(data.UID())
 	case metadata.SourceType_custom_passphrase:
 		return fmt.Sprintf("custom protector %q", data.Name())
 	case metadata.SourceType_raw_key:
@@ -154,7 +154,8 @@ func promptForName(ctx *actions.Context) (string, error) {
 	}
 
 	for {
-		name, err := promptUser("Enter a name for the new protector: ")
+		fmt.Print("Enter a name for the new protector: ")
+		name, err := util.ReadLine()
 		if err != nil {
 			return "", err
 		}
@@ -190,10 +191,10 @@ func promptForSource(ctx *actions.Context) error {
 		fmt.Printf("%d - %s (%s)\n", idx, description, source)
 	}
 
-	prompt := fmt.Sprintf("Enter the source number for the new protector [%d - %s]: ",
-		ctx.Config.Source, ctx.Config.Source)
 	for {
-		input, err := promptUser(prompt)
+		fmt.Printf("Enter the source number for the new protector [%d - %s]: ",
+			ctx.Config.Source, ctx.Config.Source)
+		input, err := util.ReadLine()
 		if err != nil {
 			return err
 		}
@@ -225,7 +226,8 @@ func promptForKeyFile(prompt string) (*os.File, error) {
 
 	// Prompt for a valid path until we get a file we can open.
 	for {
-		filename, err := promptUser(prompt)
+		fmt.Print(prompt)
+		filename, err := util.ReadLine()
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +285,8 @@ func promptForProtector(options []*actions.ProtectorOption) (int, error) {
 	}
 
 	for {
-		input, err := promptUser("Enter the number of protector to use: ")
+		fmt.Print("Enter the number of protector to use: ")
+		input, err := util.ReadLine()
 		if err != nil {
 			return 0, err
 		}

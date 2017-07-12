@@ -22,10 +22,7 @@
 
 #include <security/pam_appl.h>
 
-// fscrypt_service is the display name of the service requesting the passphrase.
-const char* fscrypt_service;
+// Conversation that will call back into Go code when appropriate.
+const struct pam_conv conv;
 
-// pam_init initializes the pam_conv structure for use with our Go callbacks.
-void pam_init(struct pam_conv* conv);
-
-#endif
+#endif  // FSCRYPT_PAM_H

@@ -24,6 +24,8 @@
 package util
 
 import (
+	"bufio"
+	"os"
 	"unsafe"
 )
 
@@ -33,6 +35,18 @@ func Ptr(slice []byte) unsafe.Pointer {
 		return nil
 	}
 	return unsafe.Pointer(&slice[0])
+}
+
+// ByteSlice takes a pointer to some data and views it as a slice of bytes.
+// Note, indexing into this slice is unsafe.
+func ByteSlice(ptr unsafe.Pointer) []byte {
+	return (*[1 << 30]byte)(ptr)[:]
+}
+
+// PointerSlice takes a pointer to an array of pointers and views it as a slice
+// of pointers. Note, indexing into this slice is unsafe.
+func PointerSlice(ptr unsafe.Pointer) []unsafe.Pointer {
+	return (*[1 << 30]unsafe.Pointer)(ptr)[:]
 }
 
 // Index returns the first index i such that inVal == inArray[i].
@@ -71,4 +85,12 @@ func MinInt64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+// ReadLine returns a line of input from standard input. An empty string is
+// returned if the user didn't insert anything or on error.
+func ReadLine() (string, error) {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	return scanner.Text(), scanner.Err()
 }
